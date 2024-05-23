@@ -1,0 +1,548 @@
+# I am learning python as the same time as OpenCV so I will
+# have put in more work than I had to. I hope that is okay.
+#
+# See main at the bottom of the script for the actual assignment
+# work.
+
+import sys
+from pathlib import Path
+import cv2
+import numpy as np
+import time
+from typing import List
+from threading import Thread
+from threading import Lock
+
+from stacy import TimeNSToMS
+from stacy import TimeNSToS
+from stacy import GetImagePath
+from stacy import LoadImage
+from stacy import GetFontCharacterSize
+from stacy import GetImagePath
+from stacy import LoadImage
+from stacy import GetFontCharacterSize
+from stacy import GetFontScale
+from stacy import PutOutlinedText
+from stacy import DrawAlphaRectangle
+from stacy import ImageProcess
+from stacy import HandleShowImages
+
+class LoadImageProcess(ImageProcess):
+    imageName: str = ""
+    finalImage: cv2.Mat = None
+    resultsChanged: bool = True
+    lock = Lock()
+
+    def __init__(self, imageName):
+        with self.lock:
+            self.imageName = imageName
+            #######################################################################
+            # Grade 1 - Read image
+            #######################################################################
+
+            self.finalImage = LoadImage(GetImagePath(self.imageName))
+
+            #######################################################################
+            #######################################################################
+            super().__init__()
+
+    def Process(self):
+        super().Process()
+    
+    def GetRawResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["Original", self.finalImage])
+        return resultslist
+    
+    def GetDisplayResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["Original", self.finalImage])
+        return resultslist
+
+
+class GrayScaleProcess(ImageProcess):
+    imageName: str = ""
+    imageGrayscale: cv2.Mat = None
+    imageColor: cv2.Mat = None
+    resultsChanged: bool = False
+    lock = Lock()
+
+    def __init__(self, originalImage):
+        with self.lock:
+            #######################################################################
+            # Grade 2 - Convert image to grayscale:
+            #######################################################################
+
+            self.grayscaleImage = cv2.cvtColor(originalImage, cv2.COLOR_BGR2GRAY)
+            self.imageColor = cv2.cvtColor(self.grayscaleImage, cv2.COLOR_GRAY2BGR)
+
+            #######################################################################
+            #######################################################################
+            super().__init__()
+
+    def Process(self):
+        super().Process()
+    
+    def GetRawResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["Gray Scale", self.imageGrayscale])
+        return resultslist
+
+    def GetDisplayResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["Gray Scale", self.imageColor])
+        return resultslist
+    
+
+class SeparateChannelsProcess(ImageProcess):
+    imageName: str = ""
+    blueChannelImage: cv2.Mat = None
+    greenChannelImage: cv2.Mat = None
+    redChannelImage: cv2.Mat = None
+    blueChannelColorImage: cv2.Mat = None
+    greenChannelColorImage: cv2.Mat = None
+    redChannelColorImage: cv2.Mat = None
+    resultsChanged: bool = False
+    lock = Lock()
+
+    def __init__(self, originalImage):
+        with self.lock:
+            #######################################################################
+            # Grade 3 - Split image into R,G,B channels:
+            #######################################################################
+
+            self.blueChannelImage = originalImage[:, :, 0]
+            self.greenChannelImage = originalImage[:, :, 1]
+            self.redChannelImage = originalImage[:, :, 2]
+
+            self.blueChannelColorImage = cv2.cvtColor(self.blueChannelImage, cv2.COLOR_GRAY2BGR)
+            self.greenChannelColorImage = cv2.cvtColor(self.greenChannelImage, cv2.COLOR_GRAY2BGR)
+            self.redChannelColorImage = cv2.cvtColor(self.redChannelImage, cv2.COLOR_GRAY2BGR)
+
+            #######################################################################
+            #######################################################################
+            super().__init__()
+
+    def Process(self):
+        super().Process()
+    
+    def GetRawResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["Blue Channel", self.blueChannelImage])
+            resultslist.append(["Green Channel", self.greenChannelImage])
+            resultslist.append(["Red Channel", self.redChannelImage])
+        return resultslist
+
+    def GetDisplayResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["Blue Channel", self.blueChannelColorImage])
+            resultslist.append(["Green Channel", self.greenChannelColorImage])
+            resultslist.append(["Red Channel", self.redChannelColorImage])
+        return resultslist
+
+class ImageThresholdingProcess(ImageProcess):
+    thresholdBlueImage: cv2.Mat = None
+    thresholdGreenImage: cv2.Mat = None
+    thresholdRedImage: cv2.Mat = None
+    thresholdBlueColorImage: cv2.Mat = None
+    thresholdGreenColorImage: cv2.Mat = None
+    thresholdRedColorImage: cv2.Mat = None
+    resultsChanged: bool = True
+    lock = Lock()
+
+    def __init__(self, blueChannelImage, greenChannelImage, redChannelImage):
+        with self.lock:
+            #######################################################################
+            # Grade 4 - Perform thresholding
+            # I played with a number of difference threshold values, I also tried various bitwise operations. 
+            # I found that the green channel worked best with the following numbers.
+            #######################################################################
+
+            _, self.thresholdBlueImage = cv2.threshold(blueChannelImage, 70, 255, cv2.THRESH_BINARY)
+            _, self.thresholdGreenImage = cv2.threshold(greenChannelImage, 70, 255, cv2.THRESH_BINARY)
+            _, self.thresholdRedImage = cv2.threshold(redChannelImage, 70, 255, cv2.THRESH_BINARY)
+
+            self.thresholdBlueColorImage = cv2.cvtColor(self.thresholdBlueImage, cv2.COLOR_GRAY2BGR)
+            self.thresholdGreenColorImage = cv2.cvtColor(self.thresholdGreenImage, cv2.COLOR_GRAY2BGR)
+            self.thresholdRedColorImage = cv2.cvtColor(self.thresholdRedImage, cv2.COLOR_GRAY2BGR)
+
+            #######################################################################
+            #######################################################################
+            super().__init__()
+
+    def Process(self):
+        super().Process()
+
+    def GetRawResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["Threshold Blue", self.thresholdBlueImage])
+            resultslist.append(["Threshold Green", self.thresholdGreenImage])
+            resultslist.append(["Threshold Red", self.thresholdRedImage])
+        return resultslist    
+    
+    def GetDisplayResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["Threshold Blue", self.thresholdBlueColorImage])
+            resultslist.append(["Threshold Green", self.thresholdGreenColorImage])
+            resultslist.append(["Threshold Red", self.thresholdRedColorImage])
+        return resultslist
+
+class ImageMorphProcess(ImageProcess):
+    sourceImage: cv2.Mat = None
+    erodeValue: int = 7
+    dilateValue: int = 17
+    erodedImage: cv2.Mat = None
+    dilateImage: cv2.Mat = None
+    finalMorphedImage: cv2.Mat = None
+    erodedColorImage: cv2.Mat = None
+    dilateColorImage: cv2.Mat = None
+    finalMorphColorImage: cv2.Mat = None
+    resultsChanged: bool = True
+    lock = Lock()
+
+    def __init__(self, sourceImage: cv2.Mat):
+        with self.lock:
+            self.sourceImage = sourceImage.copy()
+            
+        self.GenerateMorph(self.erodeValue, self.dilateValue) 
+
+        super().__init__()
+
+    def Process(self):
+        super().Process()
+
+    def GetRawResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["Eroded", self.erodedImage])
+            resultslist.append(["dilated", self.dilateImage])
+            resultslist.append(["Morphed", self.finalMorphedImage])
+        return resultslist
+    
+    def GetDisplayResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["Eroded", self.erodedColorImage])
+            resultslist.append(["dilated", self.dilateColorImage])
+            resultslist.append(["Morphed", self.finalMorphColorImage])
+        return resultslist
+    
+    def GenerateMorph(self, erodeValue: int, dilateValue: int):
+        with self.lock:
+
+            #######################################################################
+            # Grade 5 - Perform morphological operations
+            # I tried to get good results from erode, then dilate, but it wasn't quite right.
+            #######################################################################
+
+            self.erodeValue = erodeValue
+            self.dilateValue = dilateValue
+            erodeKernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.erodeValue, self.erodeValue))
+            dilateKernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.dilateValue, self.dilateValue))
+            self.erodedImage = cv2.erode(self.sourceImage, erodeKernel)
+            self.dilateImage = cv2.dilate(self.sourceImage, dilateKernel)
+
+            self.finalMorphedImage = cv2.dilate(self.erodedImage, dilateKernel)
+
+            self.erodedColorImage = cv2.cvtColor(self.erodedImage, cv2.COLOR_GRAY2BGR)
+            self.dilateColorImage = cv2.cvtColor(self.dilateImage, cv2.COLOR_GRAY2BGR)        
+            self.finalMorphColorImage = cv2.cvtColor(self.finalMorphedImage, cv2.COLOR_GRAY2BGR)
+            self.SetLastUpdateTime()
+
+            #######################################################################
+            #######################################################################
+
+    def GetErodeImage(self) -> cv2.Mat:
+        return self.erodeImage
+
+    def GetDilateImage(self) -> cv2.Mat:
+        return self.dilateImage
+    
+    def GetFinalMorpImage(self) -> cv2.Mat:
+        return self.finalMorphedImage
+    
+
+class BlobDetectionProcess(ImageProcess):
+    displayImage: cv2.Mat = None
+    processImage: cv2.Mat = None
+    blobsImageImage: cv2.Mat = None
+    keypoints = []
+    resultsChanged: bool = True
+    lock = Lock()
+
+    def __init__(self, displayImage, processImage):
+        with self.lock:
+            #######################################################################
+            # Grade 6 - 
+            # So I found that doing an erode, then dilate. I tried another erodem, which looked better,
+            # it just made the blob detection detect too many blobs within the coins themselves. So
+            # I backed it off. Yes, I used a high number for the kernel. With more time and need
+            # I'd create a tool to play with these settings.
+            #######################################################################
+
+            self.displayImage = displayImage
+            self.processImage = processImage
+
+            sbdParams = cv2.SimpleBlobDetector.Params()
+            sbdParams.blobColor = 255
+            sbdParams.minDistBetweenBlobs = 2
+            sbdParams.filterByArea = False
+            sbdParams.filterByCircularity = True
+            sbdParams.minCircularity = 0.8
+            sbdParams.filterByConvexity = True
+            sbdParams.minCircularity = 0.1
+            sbdParams.filterByInertia = True
+            sbdParams.minInertiaRatio = 0.2
+            sbDetector = cv2.SimpleBlobDetector.create(sbdParams)
+            self.keypoints = sbDetector.detect(self.processImage)
+
+            #######################################################################
+            #######################################################################
+
+            #######################################################################
+            # 7 - Display the detected coins
+            # Pretty straight forward here, except that there is not enough consitency between the
+            # order of vertex positions. So I had to reverse them here (this order, x then y, is what
+            # I am used to).
+            #######################################################################
+
+            self.blobsImage = self.displayImage.copy()
+            radius = 50
+            centerColor = (0, 200, 0)
+            circumferenceColor = (200, 0, 0)
+            thickness = 20
+            for key in self.keypoints:
+                point = int(key.pt[0]), int(key.pt[1])
+                cv2.circle(self.blobsImage, (point[0], point[1]), radius, centerColor, thickness)
+                cv2.circle(self.blobsImage, (point[0], point[1]), int(key.size / 2), circumferenceColor, thickness)
+
+            #######################################################################
+            #######################################################################
+            super().__init__()
+
+    def Process(self):
+        super().Process()
+
+    def GetRawResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["Blob Detection ({})".format(len(self.keypoints)), self.displayImage])
+        return resultslist
+    
+    def GetDisplayResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["Blob Detection ({})".format(len(self.keypoints)), self.blobsImage])
+        return resultslist
+ 
+class CCAProcess(ImageProcess):
+    rawColorImage: cv2.Mat = None
+    morphedImage: cv2.Mat = None
+    colorMappedImage: cv2.Mat = None
+    resultsChanged: bool = False
+    imageChanged: bool = False
+    lock = Lock()
+
+    def __init__(self, morphedImage):
+        with self.lock:
+            #######################################################################
+            # Grade 8 - Perform CCA
+            # Not as pretty as yours. When I have more experience with the values of all of these
+            # features, they'll be pretty.
+            #######################################################################
+
+            self.morphedImage = morphedImage
+            self.rawColorImage = cv2.cvtColor(self.morphedImage, cv2.COLOR_GRAY2BGR)
+            _, imageLabels = cv2.connectedComponents(self.morphedImage)
+            minValue, maxValue, minLocation, maxLocation = cv2.minMaxLoc(imageLabels)
+            imageLabels = 255 * (imageLabels - minValue) / (maxValue - minValue)
+            imageLabels = np.uint8(imageLabels)
+            self.colorMappedImage = cv2.applyColorMap(imageLabels, cv2.COLORMAP_JET)
+
+            #######################################################################
+            #######################################################################
+            super().__init__()
+
+
+    def Process(self):
+        super().Process()
+    
+    def GetRawResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["CCA",  self.rawColorImage])
+        return resultslist
+
+    def GetDisplayResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            resultslist.append(["CCA", self.colorMappedImage])
+        return resultslist
+
+class ContourDetectionProcess(ImageProcess):
+    imageMorpgProcess: ImageMorphProcess = None
+    displayImage: cv2.Mat = None
+    contoursImage: cv2.Mat = None
+    iterations: int = 0
+    lowestContourCount: int = 1000
+    totalTimeNS: int = 0
+    erodeValue: int = 20
+    dilateValue: int = 20
+    erodeValueMin: int = 20
+    dilateValueMin: int = 20
+    smartImage: cv2.Mat
+    contoursCount: int = 0
+    lastMorphChange = int = 0
+    lock = Lock()
+
+    def __init__(self, displayImage: cv2.Mat, imageMorphProcess: ImageMorphProcess):
+        with self.lock:
+            self.imageMorpgProcess = imageMorphProcess
+            self.done = False
+            self.displayImage = displayImage
+            self.totalTimeNS: int = 0
+            self.iterations: int = 0
+            self.lowestContourCount: int = 1000
+            self.totalTimeNS: int = 0
+            self.contoursImage = self.displayImage.copy()
+            super().__init__()
+
+    def Process(self):
+        expectedContoursCount = 9
+        maxIterations = 10000
+        maxDrawContoursCount = 1000
+        maxValues = 50
+        lastTimeNS: int = time.time_ns()
+
+        if self.iterations <= maxIterations or self.contoursCount != expectedContoursCount or self.dilateValue <= maxValues:
+            startTime = time.time_ns()
+
+            print("start generate morphed image")
+            startTime = time.time_ns()
+
+            # Grade 9 = Perform contour detection and fit circles
+            self.imageMorpgProcess.GenerateMorph(self.erodeValue, self.dilateValue)
+
+            print(f"Done, time = {TimeNSToS(time.time_ns() - startTime)}, {self.erodeValue = }, {self.dilateValue = }")
+            print("start find contours")
+
+            sourceImage = self.imageMorpgProcess.GetFinalMorpImage()
+            
+            startTime = time.time_ns()
+            contours, _ = cv2.findContours(sourceImage, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+            print(f"Done, time = {TimeNSToS(time.time_ns() - startTime)}, {self.erodeValue = }, {self.dilateValue = }")
+
+            self.contoursCount = len(contours)            
+            currentTimeNS = time.time_ns()
+            self.totalTimeNS += currentTimeNS - lastTimeNS
+            lastTimeNS = currentTimeNS
+
+            templateContoursImage = self.displayImage.copy()
+            startTime = time.time_ns()
+            print("start drawing contours")
+            startTime = time.time_ns()
+            with self.lock:
+                cv2.drawContours(templateContoursImage, contours, -1, (0, 255, 0), 13, cv2.LINE_AA)
+
+                def dont():
+                    for contour in contours:
+                        moment = cv2.moments(contour)
+                        m10 = moment["m10"]
+                        m00 = moment["m00"]
+                        m01 = moment["m01"]
+                        m00 = moment["m00"]
+                        if m10 == 0.0 or m00 == 0.0 or m01 == 0.0:
+                            continue
+
+                        x = int(round(m10 / m00))
+                        y = int(round(m01 / m00))
+                        cv2.circle(templateContoursImage, (x, y), 10, (255, 0, 0), -1)
+                self.contoursImage = templateContoursImage.copy()
+            print(f"Done, time = {TimeNSToS(time.time_ns() - startTime)}, {self.erodeValue = }, {self.dilateValue = }")
+            
+                
+            #######################################################################
+            #######################################################################
+
+            if len(contours) < self.lowestContourCount:
+                self.lowestContourCount = len(contours)
+            
+            self.erodeValue += 1
+            if self.erodeValue >= maxValues:
+                self.erodeValue = self.erodeValueMin
+                self.dilateValue += 1
+                
+            self.iterations += 1
+
+            self.SetLastUpdateTime()
+        super().Process()
+
+    def GetRawResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            
+            timeText: str = ""            
+            timeInS = TimeNSToS(self.totalTimeNS)
+            timeText = "{:.2f}s".format(timeInS)        
+            text = "Cont. (i {}, low {}, time {})".format(self.iterations, self.lowestContourCount, timeText)
+            
+            resultslist.append([text, self.sourceImage])
+        return resultslist
+    
+    def GetDisplayResults(self) -> list[str | cv2.Mat]:
+        with self.lock:
+            resultslist: list[str | cv2.Mat] = []
+            
+            timeText: str = ""            
+            timeInS = TimeNSToS(self.totalTimeNS)
+            timeText = "{:.1f}".format(timeInS)        
+            text = "Cont. itr {}, low {}, {}s)".format(self.iterations, self.lowestContourCount, timeText)
+            
+            resultslist.append([text, self.contoursImage])
+        return resultslist
+
+def main(argc: int, argv) -> int:
+    imageProcesses = []
+
+    loadImageProcess = LoadImageProcess("Coins4.jpg")
+    originalImage: cv2.Mat = loadImageProcess.GetDisplayResults()[0][1]
+    imageProcesses.append(loadImageProcess)
+    
+    grayScaleProcess = GrayScaleProcess(originalImage)
+    imageProcesses.append(grayScaleProcess)
+
+    separateChannelsProcess = SeparateChannelsProcess(originalImage)
+    [_, blueChannelImage], [_, greenChannelImage], [_, redChannelImage] = separateChannelsProcess.GetRawResults()
+    imageProcesses.append(separateChannelsProcess)
+
+    threshholdingProcess = ImageThresholdingProcess(blueChannelImage, greenChannelImage, redChannelImage)
+    [_, thresholdImageGreen] = threshholdingProcess.GetRawResults()[1]
+    imageProcesses.append(threshholdingProcess)
+
+    imageMorpgProcess = ImageMorphProcess(thresholdImageGreen)
+    [_, morphedImage] = imageMorpgProcess.GetRawResults()[2]
+    imageProcesses.append(imageMorpgProcess)
+
+    blobDetectionProcess = BlobDetectionProcess(originalImage, morphedImage)
+    imageProcesses.append(blobDetectionProcess)
+
+    ccaProcess = CCAProcess(morphedImage)
+    imageProcesses.append(ccaProcess)
+
+    contourDetectionProcess = ContourDetectionProcess(originalImage, imageMorpgProcess)
+    imageProcesses.append(contourDetectionProcess)
+
+    HandleShowImages("Window", 1200, 5, imageProcesses)
+
+    return 0
+
+if __name__ == "__main__":
+    exit(main(len(sys.argv), sys.argv))
